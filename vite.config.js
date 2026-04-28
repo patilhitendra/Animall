@@ -1,0 +1,62 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Dev mode service worker (handy for testing offline)
+      devOptions: { enabled: false },
+      manifest: {
+        name: 'जनावर बाजार - Animall',
+        short_name: 'Animall',
+        description: 'गावाचा विश्वासू प्राणी बाजार | Village Animal Marketplace',
+        theme_color: '#16a34a',
+        background_color: '#f0fdf4',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
+      },
+      workbox: {
+        // Cache all static assets
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            // Cache API animal listings (stale-while-revalidate for freshness + speed)
+            urlPattern: /\/api\/animals/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'animall-api-cache',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Cache uploaded animal images
+            urlPattern: /\/uploads\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'animall-images',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+    }),
+  ],
+  base: 'Animall',
+  server: {
+    proxy: {
+      '/api': 'http://localhost:5000',
+      '/uploads': 'http://localhost:5000',
+    },
+    allowedHosts: ['my-unique-demo-123.loca.lt']
+  },
+});
