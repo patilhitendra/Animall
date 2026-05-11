@@ -1,30 +1,40 @@
 <!DOCTYPE html>
-<html lang="mr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#16a34a" />
-    <meta name="description" content="गावाचा विश्वासू प्राणी बाजार | Buy & Sell Animals in Rural India" />
+    <meta name="theme-color" content="#047857" />
+    <meta name="description" content="Animall — village livestock marketplace. Buy & sell cows, buffaloes, goats and more." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Animall" />
 
-    <!-- Preload Noto Sans for Devanagari support -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
-    <title>जनावर बाजार | Animall</title>
-    <script type="module" crossorigin src="/Animall/assets/index-BdRhX_Rf.js"></script>
-    <link rel="stylesheet" crossorigin href="/Animall/assets/index-CdOufXNj.css">
+    <title>Animall — Livestock Marketplace</title>
+
+    <script>
+      // Sync the <html lang> attribute with the saved language preference so
+      // screen readers and CSS :lang() selectors stay correct.
+      try {
+        var saved = localStorage.getItem('animall_lang');
+        if (saved && ['en', 'hi', 'mr'].indexOf(saved) >= 0) {
+          document.documentElement.lang = saved;
+        }
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/Animall/assets/index-EeILKP9S.js"></script>
+    <link rel="stylesheet" crossorigin href="/Animall/assets/index-BxfxUFps.css">
   <link rel="manifest" href="/Animall/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/Animall/registerSW.js"></script></head>
-  <body class="bg-green-50">
+  <body>
     <div id="root"></div>
   </body>
 </html>

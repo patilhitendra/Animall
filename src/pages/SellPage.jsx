@@ -1,40 +1,43 @@
-import { useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { addAnimal, ANIMAL_META } from '../store/slices/animalsSlice';
+import { AnimatePresence, motion } from 'framer-motion';
+import { z } from 'zod';
+import toast from 'react-hot-toast';
+import { ArrowLeft, ArrowRight, Check, PartyPopper } from 'lucide-react';
+
 import Header from '../components/common/Header';
 import BottomNav from '../components/common/BottomNav';
+import StepProgress from '../components/animal/StepProgress';
+import StepType from '../components/animal/sellSteps/StepType';
+import StepPhotos from '../components/animal/sellSteps/StepPhotos';
+import StepDetails from '../components/animal/sellSteps/StepDetails';
+import StepContact from '../components/animal/sellSteps/StepContact';
+import StepReview from '../components/animal/sellSteps/StepReview';
+
+import { Button } from '../components/ui';
 import useLanguage from '../hooks/useLanguage';
-import { compressImage, fileToPreview } from '../services/imageService';
-import toast from 'react-hot-toast';
+import { addAnimal } from '../store/slices/animalsSlice';
+import { isValidIndianMobile } from '../utils/formatters';
 
-// Animal type options — matching reference
-const ANIMAL_TYPES = [
-  { key: 'cow',     label: 'गाय',    emoji: '🐄' },
-  { key: 'buffalo', label: 'म्हैस',  emoji: '🐃' },
-  { key: 'goat',    label: 'बकरी',   emoji: '🐐' },
-  { key: 'other',   label: 'इतर',    emoji: '🐾' },
-];
-
-// Breed options per type
-const BREEDS = {
-  cow:     ['जर्सी क्रॉस', 'एच.एफ.', 'गीर', 'साहिवाल', 'खिल्लार', 'इतर'],
-  buffalo: ['मुर्ग क्रॉस', 'मुर्रा', 'हरयाणवी', 'सुरती', 'मेहसाणा', 'इतर'],
-  goat:    ['उस्मानाबादी', 'संगमनेरी', 'बेरारी', 'इतर'],
-  other:   ['इतर'],
-};
-
-// Calving options
-const CALVING_OPTIONS = ['प्रसूत झाले नाही', 'पहिले', 'दुसरे', 'तिसरे', 'इतर'];
+const STEP_TYPE = 0;
+const STEP_PHOTOS = 1;
+const STEP_DETAILS = 2;
+const STEP_CONTACT = 3;
+const STEP_REVIEW = 4;
 
 export default function SellPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { tr } = useLanguage();
   const { token, user } = useSelector((s) => s.auth);
-  const fileInputRef1 = useRef();
-  const fileInputRef2 = useRef();
+
+  const [step, setStep] = useState(STEP_TYPE);
   const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
 
   const [form, setForm] = useState({
     type: 'cow',
@@ -46,41 +49,76 @@ export default function SellPage() {
     description: '',
     contactPhone: user?.phone || '',
   });
-  const [previews, setPreviews] = useState([null, null]); // Side + head photo
-  const [files, setFiles] = useState([null, null]);
 
-  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+  // ── Step labels (i18n)
+  const stepLabels = useMemo(() => ([
+    tr('sell_step_type'),
+    tr('sell_step_photos'),
+    tr('sell_step_details'),
+    tr('sell_step_contact'),
+    tr('sell_step_review'),
+  ]), [tr]);
 
-  // Handle photo slot (0 = side, 1 = head)
-  const handlePhoto = async (e, slot) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const compressed = await compressImage(file);
-    const preview = await fileToPreview(compressed);
-    const newFiles = [...files]; newFiles[slot] = compressed;
-    const newPreviews = [...previews]; newPreviews[slot] = preview;
-    setFiles(newFiles);
-    setPreviews(newPreviews);
+  // ── Schemas (built lazily so messages stay localized)
+  const detailsSchema = z.object({
+    breed: z.string().min(1, tr('required_breed')),
+    price: z.string().min(1, tr('required_price')),
+    location: z.string().min(1, tr('required_location')),
+  });
+  const contactSchema = z.object({
+    contactPhone: z.string().refine(isValidIndianMobile, tr('required_contact')),
+  });
+
+  // ── Step validators
+  const validateStep = (n) => {
+    setErrors({});
+    if (n === STEP_PHOTOS && files.length === 0) {
+      toast.error(tr('required_photo'));
+      return false;
+    }
+    if (n === STEP_DETAILS) {
+      const res = detailsSchema.safeParse(form);
+      if (!res.success) {
+        const flat = Object.fromEntries(
+          res.error.issues.map((i) => [i.path[0], i.message])
+        );
+        setErrors(flat);
+        return false;
+      }
+    }
+    if (n === STEP_CONTACT) {
+      const res = contactSchema.safeParse(form);
+      if (!res.success) {
+        setErrors({ contactPhone: res.error.issues[0].message });
+        return false;
+      }
+    }
+    return true;
   };
 
-  const handleSubmit = async () => {
-    if (!form.price) { toast.error('भाव टाका'); return; }
-    if (!form.location) { toast.error('स्थान टाका'); return; }
-    if (!/^[6-9]\d{9}$/.test(form.contactPhone)) { toast.error('संपर्क नंबर बरोबर नाही'); return; }
+  const next = () => {
+    if (!validateStep(step)) return;
+    setStep((s) => Math.min(STEP_REVIEW, s + 1));
+  };
+  const back = () => {
+    if (step === STEP_TYPE) return navigate(-1);
+    setStep((s) => Math.max(STEP_TYPE, s - 1));
+  };
 
+  const submit = async () => {
     setSubmitting(true);
     try {
       const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      files.forEach((f) => { if (f) fd.append('images', f); });
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v ?? ''));
+      files.forEach((f) => f && fd.append('images', f));
       fd.append('sellerName', user?.name || '');
       fd.append('sellerPhone', form.contactPhone);
-      fd.append('age', 2); fd.append('ageUnit', 'years'); // default
-      fd.append('description', `${form.breed || ''} | ${form.calving || ''} | ${form.milkPerDay ? form.milkPerDay + ' लिटर/दिवस' : ''}`);
+      fd.append('age', '');
+      fd.append('ageUnit', 'years');
 
       await dispatch(addAnimal({ formData: fd, token }));
-      toast.success('✅ जनावर अपलोड झाले!');
-      navigate('/my-listings');
+      toast.success(tr('listing_added'));
+      setDone(true);
     } catch {
       toast.error(tr('error_generic'));
     } finally {
@@ -88,255 +126,100 @@ export default function SellPage() {
     }
   };
 
-  const BreedOptions = BREEDS[form.type] || [];
+  if (done) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-primary-50 to-white flex flex-col">
+        <Header title={tr('sell_step_review')} showBack onBack={() => navigate('/')} />
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+          <motion.div
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 14, stiffness: 220 }}
+            className="w-24 h-24 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-2xl shadow-primary-500/30 mb-5 text-white"
+          >
+            <PartyPopper size={42} />
+          </motion.div>
+          <h2 className="text-2xl font-extrabold text-surface-900 mb-1">{tr('sell_success_title')}</h2>
+          <p className="text-sm text-surface-500 mb-6 max-w-xs">{tr('sell_success_subtitle')}</p>
+          <div className="flex gap-3 w-full max-w-sm">
+            <Button fullWidth variant="secondary" onClick={() => navigate('/')}>
+              {tr('nav_home')}
+            </Button>
+            <Button fullWidth onClick={() => navigate('/my-listings')}>
+              {tr('sell_my_animals')}
+            </Button>
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32">
-      <Header title="गुरेढोरे विक्री करा" showBack />
+    // BottomNav is intentionally hidden in the wizard — it's a focused task.
+    // The user exits via the header back arrow.
+    <div className="min-h-screen pb-28">
+      <Header title={tr('home_banner_sell_title')} showBack onBack={back} />
 
-      {/* My listings link */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-          <span>ⓘ</span>
-          <span>FREE मध्ये जनावर नोंदणी करा</span>
-        </div>
-        <button onClick={() => navigate('/my-listings')} className="text-green-600 text-sm font-bold">
-          माझी जनावरे &gt;
-        </button>
+      <div className="px-4 pt-3">
+        <StepProgress steps={stepLabels} current={step} />
       </div>
 
-      <div className="px-4 py-3 space-y-5">
+      <main className="px-4 py-5">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.25 }}
+          >
+            {step === STEP_TYPE && (
+              <StepType
+                value={form.type}
+                onChange={(v) => setForm((f) => ({ ...f, type: v, breed: '', calving: '', milkPerDay: '' }))}
+              />
+            )}
+            {step === STEP_PHOTOS && (
+              <StepPhotos
+                files={files}
+                previews={previews}
+                onChange={(f, p) => { setFiles(f); setPreviews(p); }}
+              />
+            )}
+            {step === STEP_DETAILS && (
+              <StepDetails value={form} onChange={setForm} errors={errors} />
+            )}
+            {step === STEP_CONTACT && (
+              <StepContact value={form} onChange={setForm} errors={errors} />
+            )}
+            {step === STEP_REVIEW && (
+              <StepReview value={form} previews={previews} />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </main>
 
-        {/* === Animal Type === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <span className="text-xl">🐄</span> कोणते जनावर <span className="text-red-500">*</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {ANIMAL_TYPES.map(({ key, label, emoji }) => (
-              <button
-                key={key}
-                onClick={() => { set('type', key); set('breed', ''); }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full border-2 font-semibold text-sm
-                            transition-all active:scale-95
-                            ${form.type === key
-                              ? 'bg-green-600 border-green-600 text-white'
-                              : 'bg-white border-gray-300 text-gray-700'
-                            }`}
-              >
-                {emoji} {label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* === Breed (जाती) === */}
-        {BreedOptions.length > 1 && (
-          <section className="bg-white rounded-2xl p-4 shadow-sm">
-            <p className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <span className="text-xl">🐄</span> जाती <span className="text-red-500">*</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {BreedOptions.map((b) => (
-                <button
-                  key={b}
-                  onClick={() => set('breed', b)}
-                  className={`px-4 py-2 rounded-full border-2 font-semibold text-sm transition-all active:scale-95
-                              ${form.breed === b
-                                ? 'bg-green-600 border-green-600 text-white'
-                                : 'bg-white border-gray-300 text-gray-700'
-                              }`}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* === Calving period (दुधाचा कालावधी) === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <span className="text-xl">🐄</span> दुधाचा कालावधी निवडा <span className="text-red-500">*</span>
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {CALVING_OPTIONS.map((c) => (
-              <button
-                key={c}
-                onClick={() => set('calving', c)}
-                className={`px-4 py-2 rounded-full border-2 font-semibold text-sm transition-all active:scale-95
-                            ${form.calving === c
-                              ? 'bg-green-600 border-green-600 text-white'
-                              : 'bg-white border-gray-300 text-gray-700'
-                            }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* === Milk per day === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-1 flex items-center gap-2">
-            <span className="text-xl">🥛</span> आता च दूध (प्रति दिवस)
-          </p>
-          <p className="text-xs text-gray-400 mb-3">आज पर्यंतच्या 2 वेळेस पूर्ण दूध</p>
-          <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden
-                          focus-within:border-green-500">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={form.milkPerDay}
-              onChange={(e) => set('milkPerDay', e.target.value)}
-              placeholder="उदा: 10"
-              className="flex-1 px-4 py-3 text-base outline-none"
-            />
-            <span className="px-4 py-3 bg-gray-50 text-gray-500 font-semibold border-l border-gray-200">
-              लीटर
-            </span>
-          </div>
-        </section>
-
-        {/* === Price === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-1 flex items-center gap-2">
-            <span className="text-xl">💰</span> भाव (₹) <span className="text-red-500">*</span>
-          </p>
-          <p className="text-xs text-gray-400 mb-3">योग्य भाव टाका, यामुळे अधिक खरेदीदार कॉल करतात</p>
-          <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden
-                          focus-within:border-green-500">
-            <input
-              type="number"
-              inputMode="numeric"
-              value={form.price}
-              onChange={(e) => set('price', e.target.value)}
-              placeholder="उदा: ₹40,000"
-              className="flex-1 px-4 py-3 text-base outline-none"
-            />
-            <span className="px-4 py-3 bg-gray-50 text-gray-500 font-semibold border-l border-gray-200">
-              रुपए
-            </span>
-          </div>
-        </section>
-
-        {/* === Photos (2 slots: side + head) === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-1 flex items-center gap-2">
-            <span className="text-xl">📷</span> फोटो अपलोड करा (किमान एक)
-            <span className="text-red-500">*</span>
-          </p>
-          <p className="text-xs text-gray-400 mb-3">चांगले फोटो लवकर विकीस मदत करतात</p>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'साइड फोटो निवडा', ref: fileInputRef1, slot: 0 },
-              { label: 'थनाचा फोटो निवडा', ref: fileInputRef2, slot: 1 },
-            ].map(({ label, ref, slot }) => (
-              <div key={slot}>
-                <input
-                  ref={ref}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => handlePhoto(e, slot)}
-                />
-                <button
-                  type="button"
-                  onClick={() => ref.current?.click()}
-                  className="w-full border-2 border-dashed border-gray-300 rounded-xl overflow-hidden
-                             aspect-square flex flex-col items-center justify-center gap-2
-                             bg-gray-50 active:bg-gray-100 transition-colors"
-                >
-                  {previews[slot] ? (
-                    <img src={previews[slot]} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <>
-                      <span className="text-gray-300 text-4xl">🐄</span>
-                      <span className="text-xs text-gray-400 px-2 text-center">{label}</span>
-                    </>
-                  )}
-                </button>
-                {previews[slot] && (
-                  <button
-                    className="w-full mt-1 py-2 bg-green-600 text-white text-xs font-bold rounded-xl"
-                    onClick={() => ref.current?.click()}
-                  >
-                    फोटो निवडा
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* === Location === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-1 flex items-center gap-2">
-            <span className="text-xl">📍</span> स्थान
-          </p>
-          <p className="text-xs text-gray-400 mb-3">खरेदीदारांना तुमचे जनावर येथे दिसेल</p>
-          <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden
-                          focus-within:border-green-500">
-            <input
-              type="text"
-              value={form.location}
-              onChange={(e) => set('location', e.target.value)}
-              placeholder="आपल्या जिल्हा आणि गावचे नाव प्रविष्ट करा"
-              className="flex-1 px-4 py-3 text-base outline-none"
-            />
-            <button className="px-3 py-3 text-green-600 font-bold text-sm border-l border-gray-200">
-              बदलें
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">दर 30 दिवसांनी 1 जनावर विनामूल्य नोंदणी करू शकतात</p>
-        </section>
-
-        {/* === Contact === */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <span className="text-xl">📞</span> संपर्क नंबर <span className="text-red-500">*</span>
-          </p>
-          <div className="flex items-center border-2 border-gray-200 rounded-xl overflow-hidden
-                          focus-within:border-green-500">
-            <span className="px-3 py-3 text-gray-500 font-bold border-r border-gray-200">+91</span>
-            <input
-              type="tel"
-              inputMode="numeric"
-              value={form.contactPhone}
-              onChange={(e) => set('contactPhone', e.target.value.replace(/\D/g, '').slice(0, 10))}
-              placeholder="9876543210"
-              className="flex-1 px-4 py-3 text-base font-semibold outline-none"
-            />
-          </div>
-        </section>
-
-      </div>
-
-      {/* === Sticky CTA === */}
-      <div className="fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
-        {/* Live buyer count badge */}
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <span className="flex items-center gap-1 bg-red-500 text-white text-xs font-bold
-                           px-2 py-0.5 rounded-full animate-pulse">
-            LIVE
-          </span>
-          <span className="text-xs text-gray-600 flex items-center gap-1">
-            👥 200 खरेदीदार पशु शोधत आहेत
-          </span>
-        </div>
-        <button
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="w-full bg-green-600 text-white py-4 rounded-2xl text-lg font-bold
-                     shadow-button active:scale-95 transition-transform
-                     disabled:opacity-60 disabled:cursor-not-allowed"
+      {/* Sticky action bar — sits at the bottom (no BottomNav in wizard) */}
+      <div className="fixed bottom-0 left-0 right-0 bg-surface-0 border-t border-surface-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex gap-3">
+        <Button
+          variant="secondary"
+          size="lg"
+          leftIcon={ArrowLeft}
+          onClick={back}
         >
-          {submitting ? 'अपलोड होत आहे...' : '✓ अपलोड करा'}
-        </button>
+          {tr('back')}
+        </Button>
+        {step < STEP_REVIEW ? (
+          <Button fullWidth size="lg" onClick={next} rightIcon={ArrowRight}>
+            {tr('next')}
+          </Button>
+        ) : (
+          <Button fullWidth size="lg" loading={submitting} onClick={submit} rightIcon={Check}>
+            {tr('submit')}
+          </Button>
+        )}
       </div>
-
-      <BottomNav />
     </div>
   );
 }

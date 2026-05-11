@@ -1,63 +1,94 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import useLanguage from '../../hooks/useLanguage';
+import { BOTTOM_NAV_ITEMS } from '../../constants/nav';
 
-// Matches reference: खरेदी | विक्री करा | Animall (center) | आखाडा | अलर्ट
-const NAV_ITEMS = [
-  { to: '/buy',         icon: '🛒', label: 'खरेदी' },
-  { to: '/sell',        icon: '➕', label: 'विक्री करा' },
-  { to: '/',            icon: '🐄', label: 'Animall', center: true },
-  { to: '/my-listings', icon: '📋', label: 'आखाडा' },
-  { to: '/alerts',      icon: '🔔', label: 'अलर्ट', disabled: true },
-];
-
+// 5-tab bottom navigation with a glassy surface and a floating center button.
 export default function BottomNav() {
-  const navigate = useNavigate();
+  const { tr } = useLanguage();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200
-                    shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
-      <div className="flex items-end justify-around pb-safe">
-        {NAV_ITEMS.map(({ to, icon, label, center, disabled }) => {
+    <nav
+      role="navigation"
+      aria-label={tr('nav_home')}
+      className="fixed bottom-0 left-0 right-0 z-40 glass border-t border-surface-200 shadow-glass safe-bottom"
+    >
+      <ul className="flex items-end justify-around px-1 pt-1 pb-1">
+        {BOTTOM_NAV_ITEMS.map(({ key, to, icon: Icon, labelKey, center, disabled }) => {
           if (disabled) {
             return (
-              <div key={label} className="flex flex-col items-center py-2 px-2 text-gray-300 flex-1">
-                <span className="text-2xl">{icon}</span>
-                <span className="text-[10px] mt-0.5 font-medium">{label}</span>
-              </div>
+              <li key={key} className="flex-1">
+                <div
+                  aria-disabled="true"
+                  className="flex flex-col items-center py-2 px-1 text-surface-300"
+                >
+                  <Icon size={22} />
+                  <span className="text-[10px] mt-0.5 font-semibold">{tr(labelKey)}</span>
+                </div>
+              </li>
             );
           }
 
           if (center) {
             return (
-              <NavLink key={label} to={to} end
-                className={({ isActive }) =>
-                  `flex flex-col items-center -mt-4 flex-1 ${isActive ? 'text-green-600' : 'text-gray-500'}`
-                }
-              >
-                <div className="bg-green-600 rounded-full w-14 h-14 flex items-center justify-center
-                                shadow-button border-4 border-white">
-                  <span className="text-3xl">{icon}</span>
-                </div>
-                <span className="text-[10px] mt-1 font-bold text-green-700">{label}</span>
-              </NavLink>
+              <li key={key} className="flex-1 flex justify-center">
+                <NavLink
+                  to={to}
+                  end
+                  aria-label={tr(labelKey)}
+                  className={({ isActive }) =>
+                    `relative flex flex-col items-center -mt-5 ${isActive ? 'text-primary-700' : 'text-surface-500'}`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <motion.div
+                        whileTap={{ scale: 0.92 }}
+                        animate={isActive ? { y: [-1, 1, -1] } : {}}
+                        transition={{ repeat: isActive ? Infinity : 0, duration: 2.2 }}
+                        className={`w-14 h-14 rounded-full flex items-center justify-center
+                                    bg-gradient-to-br from-brand-500 to-brand-600
+                                    shadow-lg shadow-brand-500/40 border-4 border-surface-0`}
+                      >
+                        <Icon size={26} className="text-white" />
+                      </motion.div>
+                      <span className="text-[10px] mt-1 font-bold">{tr(labelKey)}</span>
+                    </>
+                  )}
+                </NavLink>
+              </li>
             );
           }
 
           return (
-            <NavLink
-              key={label}
-              to={to}
-              className={({ isActive }) =>
-                `flex flex-col items-center py-2 px-2 flex-1 transition-colors min-h-[56px] justify-center
-                 ${isActive ? 'text-green-600' : 'text-gray-500'}`
-              }
-            >
-              <span className="text-2xl">{icon}</span>
-              <span className="text-[10px] mt-0.5 font-medium">{label}</span>
-            </NavLink>
+            <li key={key} className="flex-1">
+              <NavLink
+                to={to}
+                aria-label={tr(labelKey)}
+                className={({ isActive }) =>
+                  `relative flex flex-col items-center py-2 px-1 transition-colors min-h-touch justify-center
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 rounded-xl
+                  ${isActive ? 'text-primary-700' : 'text-surface-500 hover:text-surface-700'}`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <motion.span
+                        layoutId="nav-active"
+                        className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-brand-500"
+                        transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                      />
+                    )}
+                    <Icon size={22} />
+                    <span className="text-[10px] mt-0.5 font-semibold">{tr(labelKey)}</span>
+                  </>
+                )}
+              </NavLink>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </nav>
   );
 }

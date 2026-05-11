@@ -1,145 +1,184 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+
 import { verifyOTP, sendOTP } from '../store/slices/authSlice';
 import useLanguage from '../hooks/useLanguage';
 import AuthLoadingScreen from '../components/common/AuthLoadingScreen';
-import toast from 'react-hot-toast';
+import LanguageSwitcher from '../components/common/LanguageSwitcher';
+import { Button } from '../components/ui';
+import { formatPhoneDisplay } from '../utils/formatters';
+
+const RESEND_SECONDS = 30;
 
 export default function OTPPage() {
-  const [otp, setOtp] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const inputRef = useRef();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { tr } = useLanguage();
-  const { loading, pendingPhone, demoOtp } = useSelector((s) => s.auth);
+  const { pendingPhone, demoOtp, loading } = useSelector((s) => s.auth);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendIn, setResendIn] = useState(RESEND_SECONDS);
+  const inputsRef = useRef([]);
+
+  // Bounce to login if user landed directly without a pending phone.
   useEffect(() => { if (!pendingPhone) navigate('/login'); }, [pendingPhone, navigate]);
 
-  const handleSubmit = async (e) => {
+  // Resend countdown
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const id = setInterval(() => setResendIn((n) => Math.max(0, n - 1)), 1000);
+    return () => clearInterval(id);
+  }, [resendIn]);
+
+  // Autofocus first digit
+  useEffect(() => { inputsRef.current[0]?.focus(); }, []);
+
+  const otp = useMemo(() => digits.join(''), [digits]);
+
+  const setDigit = (i, val) => {
+    const v = val.replace(/\D/g, '').slice(-1);
+    setDigits((d) => {
+      const copy = [...d];
+      copy[i] = v;
+      return copy;
+    });
+    if (v && i < 5) inputsRef.current[i + 1]?.focus();
+  };
+
+  const handleKey = (i, e) => {
+    if (e.key === 'Backspace' && !digits[i] && i > 0) {
+      inputsRef.current[i - 1]?.focus();
+    }
+    if (e.key === 'ArrowLeft' && i > 0) inputsRef.current[i - 1]?.focus();
+    if (e.key === 'ArrowRight' && i < 5) inputsRef.current[i + 1]?.focus();
+  };
+
+  const handlePaste = (e) => {
+    const text = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+    if (!text) return;
     e.preventDefault();
-    if (otp.length !== 6) { toast.error('6 अंकी OTP टाका'); return; }
-    
+    const arr = ['', '', '', '', '', ''];
+    text.split('').forEach((c, i) => { arr[i] = c; });
+    setDigits(arr);
+    inputsRef.current[Math.min(text.length, 5)]?.focus();
+  };
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+    if (otp.length !== 6) {
+      toast.error(tr('invalid_otp_length'));
+      return;
+    }
     setIsVerifying(true);
-    
     const result = await dispatch(verifyOTP({ phone: pendingPhone, otp }));
     if (verifyOTP.fulfilled.match(result)) {
       toast.success(tr('login_success'));
-      // Keep loading screen visible while navigating
-      setTimeout(() => navigate('/'), 500);
+      setTimeout(() => navigate('/'), 600);
     } else {
       setIsVerifying(false);
-      toast.error('चुकीचा OTP, पुन्हा प्रयत्न करा');
-      setOtp('');
+      toast.error(tr('invalid_otp'));
+      setDigits(['', '', '', '', '', '']);
+      inputsRef.current[0]?.focus();
     }
   };
 
-  // Show loading screen when verifying
-  if (isVerifying) {
-    return <AuthLoadingScreen message="आपला OTP सत्यापित केला जात आहे..." />;
-  }
+  const handleResend = async () => {
+    if (resendIn > 0) return;
+    await dispatch(sendOTP(pendingPhone));
+    setResendIn(RESEND_SECONDS);
+    toast.success(tr('otp_sent'));
+  };
+
+  if (isVerifying) return <AuthLoadingScreen />;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f5e6c8]">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-white/80 backdrop-blur-sm shadow-sm">
-        <span className="text-green-600 text-2xl">🐄</span>
-        <div>
-          <p className="text-green-700 font-extrabold text-base leading-tight">Animall.in</p>
-          <p className="text-gray-500 text-[10px]">गाय भैस वाला ऐप</p>
-        </div>
-      </div>
-
-      {/* Illustration */}
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 bg-gradient-to-b from-[#c8e6c9] to-[#f5e6c8]" style={{ minHeight: '45vh' }}>
-          <div className="w-full max-w-md mx-auto px-4 pt-8">
-            <img
-              src="/images/farmer-illustration.png"
-              alt="Farmer with cows illustration"
-              className="w-full h-auto object-contain"
-              style={{ aspectRatio: '4/3' }}
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-primary-100 via-accent-50 to-accent-100">
+      <header className="flex items-center justify-between px-4 py-3 bg-surface-0/70 backdrop-blur-md shadow-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">🐄</span>
+          <div className="leading-tight">
+            <p className="text-primary-700 font-extrabold text-base">Animall</p>
+            <p className="text-surface-500 text-[10px]">{tr('app_tagline')}</p>
           </div>
         </div>
+        <LanguageSwitcher />
+      </header>
 
-        {/* Card */}
-        <div className="bg-white rounded-t-3xl shadow-2xl px-6 pt-6 pb-8">
-          <h2 className="text-2xl font-extrabold text-gray-800 text-center mb-1">
-            Animall मध्ये आपले स्वागत आहे
-          </h2>
-          <p className="text-center text-gray-600 font-semibold text-base mb-1">
-            6 अंकी OTP टाका
-          </p>
+      <div className="flex-1 flex items-end justify-center px-4 pt-4">
+        <motion.img
+          src="/images/farmer-illustration.png"
+          alt=""
+          className="w-full max-w-md object-contain"
+          style={{ aspectRatio: '4/3' }}
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+      </div>
 
-          {/* Demo OTP hint */}
-          {demoOtp && (
-            <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-2 mb-3 text-center">
-              <p className="text-xs text-yellow-700">
-                आम्ही 6 अंकी सत्यापन कोड पाठवला आहे
-              </p>
-              <p className="text-base font-bold text-yellow-900">+91 {pendingPhone}</p>
-              <p className="text-xs text-yellow-600 mt-1">
-                Demo OTP: <span className="font-extrabold text-lg text-yellow-800">{demoOtp}</span>
-              </p>
-            </div>
-          )}
+      <motion.div
+        initial={{ y: 32, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', damping: 22, stiffness: 240 }}
+        className="bg-surface-0 rounded-t-3xl shadow-2xl px-6 pt-7 pb-8 -mt-2"
+      >
+        <h2 className="text-2xl font-extrabold text-surface-900 text-center">{tr('enter_otp')}</h2>
+        <p className="text-center text-surface-500 text-sm mt-1 mb-2">{tr('otp_six_digit')}</p>
+        <p className="text-center text-sm font-bold text-surface-800 mb-3">
+          {formatPhoneDisplay(pendingPhone)}
+        </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Single 6-digit OTP input */}
-            <input
-              ref={inputRef}
-              type="tel"
-              inputMode="numeric"
-              maxLength={6}
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="6 अंकी OTP टाका"
-              className="w-full text-center text-2xl font-bold tracking-[0.5em] py-4 px-6
-                         border-2 border-gray-200 rounded-2xl focus:border-green-500 focus:outline-none
-                         bg-gray-50 transition-colors"
-            />
+        {demoOtp && (
+          <div className="bg-accent-50 border border-accent-200 rounded-2xl px-4 py-2 mb-4 text-center">
+            <p className="text-[11px] text-accent-700">{tr('otp_demo_label')}</p>
+            <p className="text-xl font-extrabold text-accent-900 tracking-widest">{demoOtp}</p>
+          </div>
+        )}
 
-            <button
-              type="submit"
-              disabled={loading || otp.length !== 6}
-              className="w-full bg-gradient-to-r from-teal-600 to-teal-700 text-white py-4 rounded-2xl 
-                         text-lg font-bold shadow-lg shadow-teal-200 active:scale-[0.98] 
-                         transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  तपासत आहे...
-                </span>
-              ) : (
-                'OTP तपासा'
-              )}
-            </button>
-          </form>
-
-          <div className="flex justify-between mt-4 text-sm font-semibold">
-            <button onClick={() => navigate('/login')} className="text-gray-500">
-              फोन नंबर बदला
-            </button>
-            <button
-              onClick={async () => { await dispatch(sendOTP(pendingPhone)); toast.success(tr('otp_sent')); }}
-              className="text-green-600"
-            >
-              OTP पुन्हा पाठवा | 30 सेकंदांनी
-            </button>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex justify-between gap-2" onPaste={handlePaste}>
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={(el) => (inputsRef.current[i] = el)}
+                type="tel"
+                inputMode="numeric"
+                maxLength={1}
+                aria-label={`Digit ${i + 1}`}
+                value={d}
+                onChange={(e) => setDigit(i, e.target.value)}
+                onKeyDown={(e) => handleKey(i, e)}
+                className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-extrabold rounded-2xl border-2 border-surface-200 bg-surface-0 outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-100 transition-all"
+              />
+            ))}
           </div>
 
-          <p className="text-center text-xs text-gray-300 mt-4">
-            Terms · Privacy · Animall Technologies © 2026
-          </p>
+          <Button type="submit" size="lg" fullWidth loading={loading} disabled={otp.length !== 6}>
+            {tr('verify_otp')}
+          </Button>
+        </form>
+
+        <div className="flex justify-between mt-4 text-sm font-semibold">
+          <button type="button" onClick={() => navigate('/login')} className="text-surface-500">
+            {tr('change_number')}
+          </button>
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resendIn > 0}
+            className={`${resendIn > 0 ? 'text-surface-400 cursor-not-allowed' : 'text-primary-600'}`}
+          >
+            {resendIn > 0 ? `${tr('resend_otp')} · ${resendIn}s` : tr('resend_otp')}
+          </button>
         </div>
-      </div>
+
+        <p className="text-center text-[11px] text-surface-400 mt-4">{tr('terms_privacy')}</p>
+      </motion.div>
     </div>
   );
 }

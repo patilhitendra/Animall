@@ -1,202 +1,125 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAnimals, ANIMAL_META } from '../store/slices/animalsSlice';
-import { setActiveCategory } from '../store/slices/uiSlice';
+import { motion } from 'framer-motion';
+import { MapPin, ChevronRight, Play } from 'lucide-react';
+
 import Header from '../components/common/Header';
 import BottomNav from '../components/common/BottomNav';
 import AnimalCard from '../components/common/AnimalCard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
+import AnimalCardSkeleton from '../components/animal/AnimalCardSkeleton';
 import HeroBanner from '../components/common/HeroBanner';
+import { fetchAnimals } from '../store/slices/animalsSlice';
 import useLanguage from '../hooks/useLanguage';
+import { HOME_BANNERS } from '../constants/banners';
+import { HOME_VIDEOS } from '../constants/videos';
 
-// Category strip — animal type chips with emoji
-const CATEGORIES = [
-  { key: 'all', label: 'सर्व', emoji: '🐾' },
-  { key: 'cow', label: 'गाय', emoji: '🐄' },
-  { key: 'buffalo', label: 'म्हशी', emoji: '🐃' },
-  { key: 'goat', label: 'प्राइम', emoji: '🐐' },
-  { key: 'chicken', label: 'वासरा', emoji: '🐓' },
-  { key: 'sheep', label: 'मेंढी', emoji: '🐑' },
-];
+const greetingKey = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'greeting_morning';
+  if (h < 17) return 'greeting_afternoon';
+  return 'greeting_evening';
+};
 
 export default function HomePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { tr } = useLanguage();
   const { list: animals, loading } = useSelector((s) => s.animals);
-  const { activeCategory } = useSelector((s) => s.ui);
   const { user } = useSelector((s) => s.auth);
 
-  // useEffect(() => { dispatch(fetchAnimals()); }, [dispatch]);
+  useEffect(() => { dispatch(fetchAnimals()); }, [dispatch]);
 
-  const filtered = activeCategory === 'all'
-    ? animals
-    : animals.filter((a) => a.type === activeCategory);
+  const greeting = useMemo(() => tr(greetingKey()), [tr]);
+  const recent = useMemo(
+    () => [...animals].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 4),
+    [animals]
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-primary-50 via-surface-50 to-accent-50/40 pb-28">
       <Header />
 
-      {/* Location bar — matching reference */}
-      <div className="bg-white px-4 py-2 flex items-center justify-between border-b border-gray-100">
-        <div className="flex items-center gap-1 text-sm text-gray-600">
-          <span>📍</span>
-          <span className="font-semibold">{user?.location || 'Pune, Maharashtra, 411001'}</span>
+      {/* Greeting + location */}
+      <section className="px-4 pt-4 pb-3">
+        <p className="text-xs text-surface-500">{greeting}{user?.name ? `, ${user.name}` : ''} 👋</p>
+        <div className="mt-1 inline-flex items-center gap-1.5 text-sm text-surface-700 font-semibold">
+          <MapPin size={14} className="text-primary-600" />
+          {user?.location || 'Pune, Maharashtra'}
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>आपल्या जवळील गुरे</span>
-          <div className="w-10 h-5 bg-gray-200 rounded-full relative">
-            <div className="w-5 h-5 bg-white rounded-full shadow absolute right-0 border border-gray-300" />
-          </div>
-        </div>
+      </section>
+
+      {/* Hero banners */}
+      <div className="px-4 space-y-3">
+        {HOME_BANNERS.map((b, i) => (
+          <motion.div
+            key={b.key}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: i * 0.08 }}
+          >
+            <HeroBanner
+              title={tr(b.titleKey)}
+              subtitle={tr(b.subtitleKey)}
+              ctaText={tr(b.ctaKey)}
+              onClick={() => navigate(b.to)}
+              variant={b.variant}
+              images={b.images.map((img) => ({ src: img.src, alt: tr(img.altKey) }))}
+            />
+          </motion.div>
+        ))}
       </div>
 
-      {/* === Hero buy/sell blocks with real images === */}
-      <div className="px-4 pt-4 space-y-3">
-        <HeroBanner
-          title="जनावर खरेदी करा"
-          subtitle="परिसरात्या जनावरबर कॉल करा आणि जनावर घरी मागा"
-          ctaText="200+ नवीन जनावर नोंदवले गेले आहेत"
-          onClick={() => navigate('/buy')}
-          images={[
-            { src: '/images/banners/cattleGrp.png', alt: 'पांढरी गाय' },
-            { src: '/images/banners/singleCattle.png', alt: 'तपकिरी गाय' }
-          ]}
-          variant="primary"
-        />
-
-        <HeroBanner
-          title="जनावर विक्री करा"
-          subtitle="आपला विकाऊ जनावर नोंदवा आणि चांगले सौदे करा"
-          ctaText="200+ विक्रेते ऑनलाईन आहेत"
-          onClick={() => navigate('/sell')}
-          images={[
-            { src: '/images/banners/person1.png', alt: 'विक्रेता' },
-            { src: '/images/banners/person2.png', alt: 'विक्रेता' },
-            { src: '/images/banners/person3.png', alt: 'विक्रेता' },
-            { src: '/images/banners/singleCattle.png', alt: 'गाय' }
-          ]}
-          variant="secondary"
-        />
-      </div>
-
-      {/* Tagline strip */}
-      <div className="mx-4 mt-3 bg-green-600 rounded-xl px-4 py-2 text-center">
-        <p className="text-white text-xs font-semibold">
-          प्रत्येक प्रक्रिया सोप्या पद्धतीने समजून घ्या!
-        </p>
-      </div>
-
-
-
-      <div>
-        <div className="mx-4 pb-2 sm:max-w-md sm:mx-auto">
-
-          {/* Fixed: Added flex-nowrap and justify-start */}
-          <div className="w-full pb-4 flex gap-3 justify-start overflow-x-auto flex-nowrap scrollbar-hide">
-
-            {/* Item 1 */}
-            <div className="flex-none flex flex-col bg-white gap-2 items-center w-28 p-2 rounded-md shadow-md cursor-pointer">
-              <div className="relative w-24 h-[70px] overflow-hidden rounded">
-                <img
-                  alt="howToBuyPashu"
-                  src="https://static-assets.animall.in/static/images/Home_page/pashu_kharide_video_thumb.png"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              </div>
-              <p className="font-medium text-xs text-gray-800 text-center leading-tight">
-                Animall वरून जनावर कसे खरेदी करायचे?
-              </p>
-            </div>
-
-            {/* Repeat for other items... */}
-            <div className="flex-none flex flex-col bg-white gap-2 items-center w-28 p-2 rounded-md shadow-md cursor-pointer">
-              <div className="relative w-24 h-[70px] overflow-hidden rounded">
-                <img
-                  alt="howToSellPashu"
-                  src="https://static-assets.animall.in/static/images/Home_page/pashu_bechein_video_thumb.png"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              </div>
-              <p className="font-medium text-xs text-gray-800 text-center leading-tight">
-                जनावर विकण्याचा योग्य मार्ग जाणून घ्या
-              </p>
-            </div>
-
-            <div className="flex-none flex flex-col bg-white gap-2 items-center w-28 p-2 rounded-md shadow-md cursor-pointer">
-              <div className="relative w-24 h-[70px] overflow-hidden rounded">
-                <img
-                  alt="howToSellPashuQuick"
-                  src="https://static-assets.animall.in/static/images/Home_page/make_pashu_prime_video_thumb.png"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              </div>
-              <p className="font-medium text-xs text-gray-800 text-center leading-tight">
-                1 दिवसात जनावर कसे विकायचे?
-              </p>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-
-      {/* === Category strip === */}
-      {/* <div className="mt-4 px-4">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {CATEGORIES.map(({ key, label, emoji }) => (
-            <button
-              key={key}
-              onClick={() => dispatch(setActiveCategory(key))}
-              className={`flex flex-col items-center flex-shrink-0 rounded-xl px-4 py-3 border-2
-                          transition-all active:scale-95 min-w-[72px]
-                          ${activeCategory === key
-                            ? 'bg-green-600 border-green-600 text-white'
-                            : 'bg-white border-gray-200 text-gray-700'
-                          }`}
+      {/* Tutorial carousel */}
+      <section className="mt-6 px-4">
+        <h2 className="text-sm font-bold text-surface-900 mb-2">{tr('home_tutorials_title')}</h2>
+        <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2">
+          {HOME_VIDEOS.map((v, i) => (
+            <motion.button
+              key={v.key}
+              type="button"
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.06 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex-shrink-0 w-40 bg-surface-0 rounded-2xl border border-surface-200 shadow-sm overflow-hidden text-left"
+              aria-label={tr(v.titleKey)}
             >
-              <span className="text-3xl">{emoji}</span>
-              <span className="text-xs font-semibold mt-1">{label}</span>
-            </button>
+              <div className="relative aspect-video bg-surface-100">
+                <img src={v.thumb} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="w-9 h-9 rounded-full bg-white/95 flex items-center justify-center shadow-lg">
+                    <Play size={16} className="ml-0.5 text-primary-600 fill-primary-600" />
+                  </span>
+                </span>
+              </div>
+              <p className="px-2.5 py-2 text-xs font-semibold text-surface-700 leading-snug line-clamp-2">
+                {tr(v.titleKey)}
+              </p>
+            </motion.button>
           ))}
         </div>
-      </div> */}
+      </section>
 
-      {/* === Listings === */}
-      {/* <div className="px-4 mt-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="font-bold text-gray-800">{tr('recent_listings')}</p>
-          <button onClick={() => navigate('/buy')} className="text-green-600 text-sm font-semibold">
-            {tr('see_all')} →
+      {/* Recent listings preview */}
+      <section className="mt-6 px-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-surface-900">{tr('recent_listings')}</h2>
+          <button
+            type="button"
+            onClick={() => navigate('/buy')}
+            className="text-xs font-bold text-primary-700 inline-flex items-center gap-0.5"
+          >
+            {tr('see_all')} <ChevronRight size={14} />
           </button>
         </div>
-
-        {loading ? (
-          <LoadingSpinner />
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-5xl mb-3">🐾</p>
-            <p>{tr('no_listings')}</p>
-          </div>
-        ) : (
-          filtered.slice(0, 5).map((animal) => (
-            <AnimalCard key={animal._id} animal={animal} />
-          ))
-        )}
-      </div> */}
-
-      {/* Voice search placeholder */}
-      {/* <div className="px-4 mt-4 mb-2">
-        <button
-          className="w-full border-2 border-dashed border-green-300 rounded-2xl py-3
-                     text-green-600 flex items-center justify-center gap-2 text-sm font-semibold
-                     bg-green-50 active:bg-green-100 transition-colors"
-          onClick={() => alert('🎤 आवाज शोध लवकरच येत आहे!')}
-        >
-          🎤 {tr('voice_search')}
-        </button>
-      </div> */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {loading
+            ? Array.from({ length: 2 }).map((_, i) => <AnimalCardSkeleton key={i} />)
+            : recent.map((animal) => <AnimalCard key={animal._id} animal={animal} />)
+          }
+        </div>
+      </section>
 
       <BottomNav />
     </div>

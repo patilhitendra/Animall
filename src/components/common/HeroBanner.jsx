@@ -1,105 +1,88 @@
-/**
- * HeroBanner Component
- * Reusable banner component for HomePage Buy/Sell sections
- * Matches design mockups with proper image handling
- */
-
 import PropTypes from 'prop-types';
+import { motion } from 'framer-motion';
+import { ChevronRight } from 'lucide-react';
 
-export default function HeroBanner({ 
-  title, 
-  subtitle, 
-  ctaText, 
-  onClick, 
-  images = [], 
-  variant = 'primary' 
+// Reusable hero banner — content is passed in fully translated.
+export default function HeroBanner({
+  title, subtitle, ctaText, onClick,
+  images = [], variant = 'primary',
 }) {
-  const bgColor = variant === 'primary' ? 'bg-teal-700' : 'bg-teal-600';
-  
+  // Hero banners use brand-* (non-inverting) so the emerald identity persists
+  // in both light and dark modes — they're meant to be a visual anchor.
+  const gradient =
+    variant === 'primary'
+      ? 'from-brand-700 via-brand-600 to-brand-500'
+      : 'from-accent-600 via-accent-500 to-accent-400';
+
   return (
-    <button
+    <motion.button
+      type="button"
       onClick={onClick}
-      className={`w-full ${bgColor} rounded-2xl shadow-lg p-5 flex items-center gap-4
-                 active:scale-[0.98] transition-transform text-left relative overflow-hidden`}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
       aria-label={title}
+      className={`
+        w-full bg-gradient-to-br ${gradient} rounded-3xl p-5 flex items-center gap-3
+        text-left shadow-xl shadow-black/10 relative overflow-hidden
+        focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30
+      `}
     >
-      {/* Content Section */}
-      <div className="flex-1 z-10">
-        <h2 className="text-xl font-extrabold text-white mb-1 flex items-center gap-2">
-          {title} <span className="text-lg">›</span>
+      {/* Decorative blobs */}
+      <div className="pointer-events-none absolute -top-12 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-16 -left-10 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
+
+      <div className="flex-1 relative z-10">
+        <h2 className="text-lg font-extrabold text-white inline-flex items-center gap-1">
+          {title}
+          <ChevronRight size={18} className="opacity-90" />
         </h2>
-        <p className="text-sm text-white/90 mb-2">{subtitle}</p>
-        <div className="flex items-center gap-1">
-          <span className="w-2 h-2 bg-lime-400 rounded-full"></span>
-          <p className="text-xs text-lime-300 font-semibold">{ctaText}</p>
+        <p className="text-sm text-white/90 mt-1 leading-snug max-w-[20ch]">{subtitle}</p>
+        <div className="mt-2 inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-full px-2.5 py-1">
+          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+          <span className="text-[11px] font-semibold text-white/90">{ctaText}</span>
         </div>
       </div>
 
-      {/* Image Section - Exact positioning like screenshot */}
-      <div className="flex-shrink-0 relative h-32 w-36">
-        {images.length > 0 ? (
-          variant === 'primary' ? (
-            /* Buy Banner - Two cows side by side */
-            <div className="relative h-full flex items-end justify-end">
-              {/* White cow - left, larger */}
-              <img
-                src={images[0]?.src || ''}
-                alt={images[0]?.alt || ''}
-                className="absolute bottom-0 left-0 w-40 h-30 object-contain z-10"
-                loading="lazy"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              {/* Brown cow - right, slightly smaller */}
-              {/* <img
-                src={images[1]?.src || ''}
-                alt={images[1]?.alt || ''}
-                className="absolute bottom-0 right-0 w-20 h-24 object-contain"
-                loading="lazy"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              /> */}
-            </div>
-          ) : (
-            /* Sell Banner - Sellers + cow in circular layout */
-            <div className="relative h-full w-full">
-              {/* Top seller - top right */}
-              <img
-                src={images[0]?.src || ''}
-                alt={images[0]?.alt || ''}
-                className="absolute top-0 right-4 w-14 h-14 rounded-full object-contain border-2 border-white z-20"
-                loading="lazy"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              {/* Left seller - middle left */}
-              <img
-                src={images[1]?.src || ''}
-                alt={images[1]?.alt || ''}
-                className="absolute top-8 left-0 w-14 h-14 rounded-full object-contain border-2 border-white z-20"
-                loading="lazy"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              {/* Bottom right seller - bottom right */}
-              <img
-                src={images[2]?.src || ''}
-                alt={images[2]?.alt || ''}
-                className="absolute bottom-4 right-0 w-14 h-14 rounded-full object-contain border-2 border-white z-20"
-                loading="lazy"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              {/* Cow - center bottom */}
-              <img
-                src={images[3]?.src || ''}
-                alt={images[3]?.alt || ''}
-                className="absolute top-20 right-10 w-20 h-20 rounded-full object-contain border-2 border-white z-20"
-                loading="lazy"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            </div>
+      {/* Image stack — simple, scales across variants */}
+      <div className="relative h-28 w-32 flex-shrink-0 z-10">
+        {variant === 'primary' ? (
+          images[0]?.src && (
+            <motion.img
+              src={images[0].src}
+              alt={images[0]?.alt || ''}
+              className="absolute bottom-0 right-0 w-32 h-28 object-contain drop-shadow-lg"
+              loading="lazy"
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.45 }}
+              onError={(e) => (e.currentTarget.style.display = 'none')}
+            />
           )
         ) : (
-          <span className="text-6xl filter drop-shadow-lg">🐄</span>
+          images.slice(0, 4).map((img, i) => {
+            const pos = [
+              'top-0 right-3 w-12 h-12',
+              'top-7 left-0 w-12 h-12',
+              'bottom-2 right-0 w-12 h-12',
+              'bottom-0 left-6 w-16 h-16',
+            ][i];
+            return (
+              <motion.img
+                key={i}
+                src={img.src}
+                alt={img.alt || ''}
+                className={`absolute ${pos} rounded-full object-cover border-2 border-white/80 shadow-md`}
+                loading="lazy"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.35, delay: i * 0.08 }}
+                onError={(e) => (e.currentTarget.style.display = 'none')}
+              />
+            );
+          })
         )}
       </div>
-    </button>
+    </motion.button>
   );
 }
 
@@ -108,11 +91,9 @@ HeroBanner.propTypes = {
   subtitle: PropTypes.string.isRequired,
   ctaText: PropTypes.string.isRequired,
   onClick: PropTypes.func.isRequired,
-  images: PropTypes.arrayOf(
-    PropTypes.shape({
-      src: PropTypes.string.isRequired,
-      alt: PropTypes.string,
-    })
-  ),
+  images: PropTypes.arrayOf(PropTypes.shape({
+    src: PropTypes.string,
+    alt: PropTypes.string,
+  })),
   variant: PropTypes.oneOf(['primary', 'secondary']),
 };

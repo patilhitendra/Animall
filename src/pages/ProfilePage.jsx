@@ -1,176 +1,137 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  ChevronRight, Edit3, LogOut, Phone, PhoneIncoming,
+  Heart, Coins, MessageSquare, Wallet,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+
+import Header from '../components/common/Header';
+import BottomNav from '../components/common/BottomNav';
+import LanguageSwitcher from '../components/common/LanguageSwitcher';
+import ThemeToggle from '../components/common/ThemeToggle';
 import { logout } from '../store/slices/authSlice';
-import { toggleLang } from '../store/slices/uiSlice';
 import useLanguage from '../hooks/useLanguage';
+import { Avatar, Card, Button } from '../components/ui';
+import { formatPhoneDisplay } from '../utils/formatters';
+
+function Section({ title, children }) {
+  return (
+    <section className="mb-3">
+      <h3 className="px-4 pt-3 pb-2 text-xs font-bold uppercase tracking-wide text-surface-500">{title}</h3>
+      <Card className="!rounded-none border-x-0">{children}</Card>
+    </section>
+  );
+}
+
+function MenuItem({ icon: Icon, label, onClick, accent }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-50 active:bg-surface-100 transition-colors border-b border-surface-50 last:border-b-0
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300`}
+    >
+      <span className="flex items-center gap-3">
+        <span className={`w-9 h-9 rounded-full flex items-center justify-center ${accent || 'bg-surface-100 text-surface-700'}`}>
+          <Icon size={18} />
+        </span>
+        <span className="text-sm font-semibold text-surface-800">{label}</span>
+      </span>
+      <ChevronRight size={18} className="text-surface-400" />
+    </button>
+  );
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const { tr } = useLanguage();
   const { user } = useSelector((s) => s.auth);
-  const { lang } = useLanguage();
 
   const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      dispatch(logout());
-      navigate('/login');
-    }
+    if (!window.confirm(tr('profile_confirm_logout'))) return;
+    dispatch(logout());
+    toast.success(tr('done'));
+    navigate('/login');
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="sticky top-0 z-40 bg-white shadow-sm">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="text-gray-700 text-2xl min-w-[44px] min-h-[44px] flex items-center"
-            >
-              ←
-            </button>
-            <h1 className="text-lg font-bold text-gray-800">प्रोफाइल</h1>
-          </div>
-          
-          {/* Language Toggle */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => dispatch(toggleLang())}
-              className="bg-purple-400 text-white font-semibold px-4 py-2 rounded-full text-sm flex items-center gap-1"
-            >
-              {lang === 'mr' ? 'En | मर' : 'मर | En'}
-              <span className="text-xs">▾</span>
-            </button>
-            <button className="text-gray-700 text-xl">⋮</button>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen pb-28">
+      <Header title={tr('profile_title')} showBack />
 
-      {/* Profile Section */}
-      <div className="bg-white p-6 mb-2">
-        <div className="flex items-start justify-between">
+      {/* Profile card */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="px-4 pt-4"
+      >
+        <Card className="p-5">
           <div className="flex items-center gap-4">
-            {/* Avatar */}
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-3xl text-gray-400 overflow-hidden">
-              {user?.profilePhoto ? (
-                <img src={user.profilePhoto} alt={user.name} className="w-full h-full object-cover" />
-              ) : (
-                <span>👤</span>
-              )}
-            </div>
-            
-            {/* User Info */}
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">{user?.name || 'Hitendra'}</h2>
-              <p className="text-gray-600 text-sm">{user?.location || 'Pune'} | {user?.phone || '7798865981'}</p>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-orange-500 flex items-center gap-1">
-                  ⭐ 0 (0)
-                </span>
-                <span className="text-orange-500 text-sm">75% अपूर्ण</span>
+            <Avatar src={user?.profilePhoto} name={user?.name || 'A'} size="xl" />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-extrabold text-surface-900 truncate">
+                {user?.name || tr('seller')}
+              </h2>
+              <p className="text-sm text-surface-500 truncate">
+                {user?.location ? `${user.location} · ` : ''}{formatPhoneDisplay(user?.phone)}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <LanguageSwitcher />
+                <ThemeToggle />
               </div>
             </div>
+            <Button size="sm" variant="secondary" leftIcon={Edit3} onClick={() => navigate('/edit-profile')}>
+              {tr('edit')}
+            </Button>
           </div>
-          
-          {/* Edit Button */}
-          <button 
-            onClick={() => navigate('/edit-profile')}
-            className="text-green-600 text-sm font-semibold flex items-center gap-1 bg-green-50 px-3 py-1.5 rounded-lg"
-          >
-            ✏️ बदला
-          </button>
-        </div>
-      </div>
+        </Card>
+      </motion.div>
 
-      {/* Stats Section */}
-      <div className="bg-white p-6 mb-4">
-        <p className="text-sm text-gray-600 mb-3">Animall वर 5 वर्ष 2 महिने चा प्रवास</p>
+      {/* Stats */}
+      <section className="px-4 mt-4">
+        <p className="text-xs text-surface-500 mb-2">{tr('profile_journey')}</p>
         <div className="grid grid-cols-3 gap-3">
-          {/* Listings Posted */}
-          <div className="bg-purple-100 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <span className="text-2xl text-purple-600">🐄</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">0</p>
-            <p className="text-xs text-gray-600 mt-1">जनावरे टाकली</p>
-          </div>
-          
-          {/* Calls Made */}
-          <div className="bg-purple-100 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <span className="text-2xl text-purple-600">📞</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">0</p>
-            <p className="text-xs text-gray-600 mt-1">कॉल केले</p>
-          </div>
-          
-          {/* Calls Received */}
-          <div className="bg-purple-100 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <span className="text-2xl text-purple-600">📞</span>
-            </div>
-            <p className="text-2xl font-bold text-gray-900">0</p>
-            <p className="text-xs text-gray-600 mt-1">कॉल आले</p>
-          </div>
+          {[
+            { value: 0, label: tr('profile_listings_posted'), icon: '🐄' },
+            { value: 0, label: tr('profile_calls_made'),     icon: '📞' },
+            { value: 0, label: tr('profile_calls_received'), icon: '📲' },
+          ].map((s) => (
+            <Card key={s.label} className="p-4 text-center !shadow-sm">
+              <span className="text-2xl">{s.icon}</span>
+              <p className="text-2xl font-extrabold text-surface-900 mt-1">{s.value}</p>
+              <p className="text-[11px] text-surface-500 leading-tight mt-1">{s.label}</p>
+            </Card>
+          ))}
         </div>
+      </section>
+
+      {/* Sections */}
+      <div className="mt-4">
+        <Section title={tr('profile_section_selling')}>
+          <MenuItem icon={Wallet} label={tr('profile_my_plan')} onClick={() => {}} accent="bg-accent-100 text-accent-700" />
+          <MenuItem icon={PhoneIncoming} label={tr('profile_my_animals')} onClick={() => navigate('/my-listings')} accent="bg-primary-100 text-primary-700" />
+          <MenuItem icon={Phone} label={tr('profile_calls_received')} onClick={() => {}} accent="bg-blue-100 text-blue-700" />
+        </Section>
+
+        <Section title={tr('profile_section_buying')}>
+          <MenuItem icon={Phone} label={tr('profile_calls_made')} onClick={() => {}} accent="bg-purple-100 text-purple-700" />
+          <MenuItem icon={Heart} label={tr('profile_liked')} onClick={() => {}} accent="bg-rose-100 text-rose-600" />
+        </Section>
+
+        <Section title={tr('profile_section_other')}>
+          <MenuItem icon={Coins} label={tr('profile_coins')} onClick={() => {}} accent="bg-yellow-100 text-yellow-700" />
+          <MenuItem icon={MessageSquare} label={tr('profile_help')} onClick={() => {}} accent="bg-primary-100 text-primary-700" />
+        </Section>
+
+        <Section title={tr('profile_section_help')}>
+          <MenuItem icon={LogOut} label={tr('profile_logout')} onClick={handleLogout} accent="bg-red-50 text-red-500" />
+        </Section>
       </div>
 
-      {/* Selling Related Section */}
-      <div className="bg-white mb-2">
-        <div className="px-6 py-3 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">विक्रीशी संबंधित</h3>
-        </div>
-        
-        <MenuItem icon="💰" title="माझा प्लान" />
-        <MenuItem icon="🐄" title="जनावरे" />
-        <MenuItem icon="📞" title="कॉल आले" />
-      </div>
-
-      {/* Buying Related Section */}
-      <div className="bg-white mb-2">
-        <div className="px-6 py-3 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">खरेदीशी संबंधित</h3>
-        </div>
-        
-        <MenuItem icon="📞" title="कॉल केले" />
-        <MenuItem icon="🐾" title="आवडलेली जनावरे" />
-      </div>
-
-      {/* Other Section */}
-      <div className="bg-white mb-2">
-        <div className="px-6 py-3 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">इतर</h3>
-        </div>
-        
-        <MenuItem icon="🪙" title="कॉईन्स" />
-        <MenuItem icon="💬" title="जनाव चर्चा पोस्ट" />
-      </div>
-
-      {/* Help Section */}
-      <div className="bg-white mb-20">
-        <div className="px-6 py-3 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">मदत घ्या</h3>
-        </div>
-        
-        <MenuItem icon="💬" title="आम्हाला संदेश द्या" isWhatsApp />
-      </div>
+      <BottomNav />
     </div>
-  );
-}
-
-// Menu Item Component
-function MenuItem({ icon, title, isWhatsApp = false }) {
-  return (
-    <button className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-50 last:border-b-0">
-      <div className="flex items-center gap-3">
-        <span className={`text-2xl ${isWhatsApp ? '' : 'text-gray-600'}`}>
-          {isWhatsApp ? '💬' : icon}
-        </span>
-        <span className={`font-medium ${isWhatsApp ? 'text-green-600' : 'text-gray-900'}`}>
-          {title}
-        </span>
-      </div>
-      <span className="text-gray-400 text-xl">›</span>
-    </button>
   );
 }

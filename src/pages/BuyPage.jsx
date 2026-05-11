@@ -1,128 +1,185 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAnimals, ANIMAL_META } from '../store/slices/animalsSlice';
-import { setActiveCategory, setPriceRange, clearFilters } from '../store/slices/uiSlice';
+import { motion } from 'framer-motion';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
+
 import Header from '../components/common/Header';
 import BottomNav from '../components/common/BottomNav';
 import AnimalCard from '../components/common/AnimalCard';
-import LoadingSpinner from '../components/common/LoadingSpinner';
-import useLanguage from '../hooks/useLanguage';
+import AnimalCardSkeleton from '../components/animal/AnimalCardSkeleton';
+import CategoryChips from '../components/animal/CategoryChips';
+import AnimalFilters from '../components/animal/AnimalFilters';
 
-const CATEGORIES = [
-  { key: 'all',     label: 'सर्व',   emoji: '🐾' },
-  { key: 'cow',     label: 'गाय',    emoji: '🐄' },
-  { key: 'buffalo', label: 'म्हशी',  emoji: '🐃' },
-  { key: 'goat',    label: 'बकरी',   emoji: '🐐' },
-  { key: 'chicken', label: 'कोंबडी', emoji: '🐓' },
-  { key: 'sheep',   label: 'मेंढी',  emoji: '🐑' },
-  { key: 'pig',     label: 'डुक्कर', emoji: '🐷' },
-];
+import { EmptyState, Select, IconButton } from '../components/ui';
+import useLanguage from '../hooks/useLanguage';
+import {
+  setActiveCategory, setPriceRange, setSortBy, setSearchQuery, clearFilters,
+} from '../store/slices/uiSlice';
+import { BREEDS, breedI18nKey } from '../constants/animals';
 
 export default function BuyPage() {
   const dispatch = useDispatch();
   const { tr } = useLanguage();
   const { list: animals, loading } = useSelector((s) => s.animals);
-  const { activeCategory, priceRange } = useSelector((s) => s.ui);
-  const [showFilter, setShowFilter] = useState(false);
+  const { activeCategory, priceRange, sortBy, searchQuery } = useSelector((s) => s.ui);
 
-  // useEffect(() => { dispatch(fetchAnimals()); }, [dispatch]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [activeBreed, setActiveBreed] = useState('');
 
-  const filtered = animals.filter((a) => {
-    const typeOk = activeCategory === 'all' || a.type === activeCategory;
-    const priceOk = a.price >= priceRange[0] && a.price <= priceRange[1];
-    return typeOk && priceOk;
-  });
+  // Reset breed filter when category changes.
+  useEffect(() => { setActiveBreed(''); }, [activeCategory]);
+
+  const sortOptions = useMemo(() => ([
+    { value: 'newest',     label: tr('sort_newest') },
+    { value: 'price_asc',  label: tr('sort_price_asc') },
+    { value: 'price_desc', label: tr('sort_price_desc') },
+  ]), [tr]);
+
+  const breedOptions = useMemo(() => {
+    if (activeCategory === 'all') return [];
+    const list = BREEDS[activeCategory] || [];
+    return list.map((b) => ({ value: b, label: tr(breedI18nKey(activeCategory, b)) }));
+  }, [activeCategory, tr]);
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    let arr = animals.filter((a) => {
+      if (activeCategory !== 'all' && a.type !== activeCategory) return false;
+      if (activeBreed && a.breed !== activeBreed) return false;
+      if (a.price < priceRange[0] || a.price > priceRange[1]) return false;
+      if (q) {
+        const hay = `${a.breed || ''} ${a.location || ''} ${a.sellerName || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    if (sortBy === 'price_asc') arr = [...arr].sort((a, b) => a.price - b.price);
+    else if (sortBy === 'price_desc') arr = [...arr].sort((a, b) => b.price - a.price);
+    else arr = [...arr].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return arr;
+  }, [animals, activeCategory, activeBreed, priceRange, searchQuery, sortBy]);
+
+  const filtersDirty =
+    activeCategory !== 'all' ||
+    activeBreed ||
+    priceRange[1] < 200000 ||
+    searchQuery.trim().length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
-      <Header title="जनावर खरेदी करा" showBack />
+    <div className="min-h-screen pb-28">
+      <Header title={tr('buy_title')} showBack />
 
-      {/* Sticky category + filter strip */}
-      <div className="sticky top-[57px] z-30 bg-white shadow-sm">
-        <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
-          {CATEGORIES.map(({ key, label, emoji }) => (
-            <button
-              key={key}
-              onClick={() => dispatch(setActiveCategory(key))}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full border-2 text-sm
-                          font-semibold whitespace-nowrap flex-shrink-0 transition-all active:scale-95
-                          ${activeCategory === key
-                            ? 'bg-green-600 border-green-600 text-white'
-                            : 'bg-white border-gray-200 text-gray-600'
-                          }`}
-            >
-              {emoji} {label}
-            </button>
-          ))}
+      {/* Search + sort */}
+      <div className="bg-surface-0 sticky top-[57px] z-30 shadow-sm">
+        <div className="px-3 pt-3 pb-2 flex items-center gap-2">
+          <div className="flex-1 flex items-center bg-surface-100 rounded-2xl px-3 py-2 focus-within:ring-2 focus-within:ring-primary-300">
+            <Search size={18} className="text-surface-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => dispatch(setSearchQuery(e.target.value))}
+              placeholder={tr('search_placeholder')}
+              className="flex-1 bg-transparent px-2 py-1 text-sm outline-none"
+              aria-label={tr('search')}
+            />
+            {searchQuery && (
+              <IconButton
+                icon={X}
+                label={tr('clear')}
+                size="sm"
+                variant="ghost"
+                onClick={() => dispatch(setSearchQuery(''))}
+              />
+            )}
+          </div>
           <button
-            onClick={() => setShowFilter(true)}
-            className="flex items-center gap-1 px-4 py-2 rounded-full border-2
-                       border-blue-300 bg-blue-50 text-blue-600 text-sm font-semibold flex-shrink-0"
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            aria-label={tr('filter')}
+            className="relative inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-surface-0 border-2 border-surface-200 text-surface-700 hover:border-primary-400 hover:text-primary-700 transition-colors"
           >
-            🔧 {tr('filters')}
+            <SlidersHorizontal size={18} />
+            {filtersDirty && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />
+            )}
           </button>
+        </div>
+
+        <div className="px-3 pb-3">
+          <CategoryChips
+            active={activeCategory}
+            onChange={(k) => dispatch(setActiveCategory(k))}
+          />
         </div>
       </div>
 
-      {/* Listings */}
-      <main className="px-4 pt-3 space-y-3">
+      {/* Result count + sort */}
+      <div className="px-4 pt-4 pb-2 flex items-center justify-between gap-3">
+        <p className="text-xs text-surface-500">
+          {loading ? tr('loading') : tr('buy_results', { n: filtered.length })}
+        </p>
+        <Select
+          value={sortBy}
+          options={sortOptions}
+          onChange={(e) => dispatch(setSortBy(e.target.value))}
+          className="!w-44"
+          aria-label={tr('buy_sort_label')}
+        />
+      </div>
+
+      <main className="px-4 pt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {loading ? (
-          <LoadingSpinner />
+          Array.from({ length: 4 }).map((_, i) => <AnimalCardSkeleton key={i} />)
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <p className="text-5xl mb-3">🐾</p>
-            <p className="text-lg">{tr('no_listings')}</p>
+          <div className="col-span-full">
+            <EmptyState
+              icon="🐾"
+              title={tr('no_listings')}
+              subtitle={tr('clear')}
+              action={
+                filtersDirty ? (
+                  <button
+                    type="button"
+                    onClick={() => dispatch(clearFilters())}
+                    className="px-5 py-2.5 bg-primary-600 text-white rounded-2xl font-bold"
+                  >
+                    {tr('clear')}
+                  </button>
+                ) : null
+              }
+            />
           </div>
         ) : (
-          <>
-            <p className="text-xs text-gray-400">{filtered.length} जाहिराती</p>
-            {filtered.map((animal) => (
-              <AnimalCard key={animal._id} animal={animal} />
-            ))}
-          </>
+          filtered.map((animal, i) => (
+            <motion.div
+              key={animal._id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: Math.min(i * 0.03, 0.3) }}
+            >
+              <AnimalCard animal={animal} />
+            </motion.div>
+          ))
         )}
       </main>
 
-      {/* Filter bottom sheet */}
-      {showFilter && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowFilter(false)} />
-          <div className="relative bg-white rounded-t-3xl p-6 shadow-2xl">
-            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-center mb-5">{tr('filters')}</h3>
-
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-600 mb-3">
-                💰 {tr('price_range')}: ₹0 – ₹{priceRange[1].toLocaleString('en-IN')}
-              </label>
-              <input
-                type="range" min={0} max={200000} step={5000}
-                value={priceRange[1]}
-                onChange={(e) => dispatch(setPriceRange([0, Number(e.target.value)]))}
-                className="w-full accent-green-600 h-2"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>₹0</span><span>₹2,00,000+</span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => { dispatch(clearFilters()); setShowFilter(false); }}
-                className="flex-1 py-3 border-2 border-gray-300 rounded-2xl font-semibold text-gray-600"
-              >
-                {tr('clear_filters')}
-              </button>
-              <button
-                onClick={() => setShowFilter(false)}
-                className="flex-1 py-3 bg-green-600 text-white rounded-2xl font-semibold shadow-button"
-              >
-                {tr('apply_filters')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimalFilters
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => setFilterOpen(false)}
+        onClear={() => {
+          dispatch(clearFilters());
+          setActiveBreed('');
+          setFilterOpen(false);
+        }}
+        priceRange={priceRange}
+        setPriceRange={(range) => dispatch(setPriceRange(range))}
+        breedOptions={breedOptions}
+        activeBreed={activeBreed}
+        setActiveBreed={setActiveBreed}
+      />
 
       <BottomNav />
     </div>

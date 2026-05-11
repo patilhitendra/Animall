@@ -2,7 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+// In dev we serve at /, in production we serve under /Animall/ (GitHub Pages).
+// React Router reads import.meta.env.BASE_URL to stay in sync.
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/Animall/' : '/',
   plugins: [
     react(),
     VitePWA({
@@ -51,7 +54,6 @@ export default defineConfig({
       },
     }),
   ],
-  base: 'Animall',
   server: {
     proxy: {
       '/api': 'http://localhost:5000',
@@ -59,4 +61,4 @@ export default defineConfig({
     },
     allowedHosts: ['my-unique-demo-123.loca.lt']
   },
-});
+}));
